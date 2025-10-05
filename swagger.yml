@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: GeoJSON API
+  version: 1.0.0
+  description: >
+    API for uploading and managing GeoJSON features with upload rules.
+    - Define a rule once (`/rule/{rule}`).
+    - Upload FeatureCollections using that rule (`/upload/{rule}`).
+
+servers:
+  - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    UploadRule:
+      type: object
+      required: [ featureclass, mapping]
+      properties:
+        featureclass:
+          type: string
+          example: city
+          description: Target collection name (without geo_ prefix)
+        mapping:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            _id: fid
+            name: NAME
+          description: >
+            Mapping between collection fields and GeoJSON feature properties.
+
+    GeoJSONFeature:
+      type: object
+      required: [type, geometry]
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        properties:
+          type: object
+        geometry:
+          type: object
+          description: Valid GeoJSON geometry object
+
+    GeoJSONFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeoJSONFeature'
+
+    UploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        collection:
+          type: string
+          example: geo_city
+        inserted:
+          type: integer
+          example: 5
+        modified:
+          type: integer
+          example: 10
+
+paths:
+  /map/rule/{rule}:
+    post:
+      summary: Create or update an upload rule
+      description: >
+        Defines a mapping rule to use later in `/upload/{rule}`.
+        Requires basic authentication.
+      security:
+        - basicAuth: []
+      parameters:
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+          description: Unique ID of the rule (used in /upload)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRule'
+      responses:
+        '200':
+          description: Rule saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  inserted:
+                    type: integer
+                  modified:
+                    type: integer
+
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /map/upload/{rule}:
+    post:
+      summary: Upload a GeoJSON FeatureCollection using a rule
+      description: >
+        Uploads features into the collection defined by the rule.
+        Requires basic authentication.
+      security:
+        - basicAuth: []
+      parameters:
+        - in: path
+          name: rule
+          required: true
+          schema:
+            type: string
+          description: Rule ID created with `/rule/{rule}`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeoJSONFeatureCollection'
+      responses:
+        '200':
+          description: Features inserted/updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Rule not found
+
+  /map/features/{featureclass}:
+    get:
+      summary: Get features from a feature class
+      description: >
+        Returns a GeoJSON FeatureCollection of features from the collection
+        `geo_{featureclass}` that fall within a circle defined by `lng`, `lat`
+        (center) and `radius` (in radians). Features are filtered by zoom level
+        automatically based on the radius.
+      parameters:
+        - name: featureclass
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The feature class (e.g., `country`, `city`, `coastline`)
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          description: Longitude of the map center
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          description: Latitude of the map center
+        - name: radius
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+          description: Radius of the map in radians
+      responses:
+        "200":
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [FeatureCollection]
+                  features:
+                    type: array
+                    items:
+                      type: object
+                      description: A GeoJSON Feature
+                      properties:
+                        type:
+                          type: string
+                          enum: [Feature]
+                        geometry:
+                          type: object
+                          description: GeoJSON geometry
+                        properties:
+                          type: object
+                          description: Arbitrary feature properties
+        "400":
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
