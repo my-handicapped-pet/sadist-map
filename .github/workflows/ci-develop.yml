@@ -13,7 +13,7 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # Trigger sadist-ci's reusable workflow
-    uses: ilyaukin/sadist-ci/.github/workflows/ci-develop.yml@develop
+    uses: my-handicapped-pet/sadist-ci/.github/workflows/ci-develop.yml@develop
     with:
       image_list: '["webapp-map"]'
     secrets: inherit
